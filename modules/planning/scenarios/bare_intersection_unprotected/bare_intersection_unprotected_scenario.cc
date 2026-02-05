@@ -65,6 +65,12 @@ bool BareIntersectionUnprotectedScenario::IsTransferable(
     return false;
   }
   const auto& reference_line_info = frame.reference_line_info().front();
+
+
+  // first_encountered_overlaps 是一个容器，存储了车辆即将遇到的所有重叠区域信息。
+  // overlap.first：表示重叠区域的类型（例如信号灯、停车标志、PNC 路口等）。
+  // overlap.second：表示具体的重叠区域对象（如 hdmap::PathOverlap 结构体，包含起始位置、结束位置等信息）。
+
   const auto& first_encountered_overlaps =
       reference_line_info.FirstEncounteredOverlaps();
   hdmap::PathOverlap* pnc_junction_overlap = nullptr;
@@ -74,19 +80,27 @@ bool BareIntersectionUnprotectedScenario::IsTransferable(
     return false;
   }
 
+
+  // 遍历所有重叠区域，first_encountered_overlaps容器，查找特定类型的路径重叠区域：
+  // 1. 找到与车辆即将进入的 PNC 交叉路口重叠的区域。
+  // 2. 找到与车辆即将进入的标志重叠的区域。
   for (const auto& overlap : first_encountered_overlaps) {
+    // 如果遇到信号灯、停车标志或让行标志，且traffic_sign_overlap未被赋值，则将其设为当前重叠区域并跳出循环。
     if ((overlap.first == ReferenceLineInfo::SIGNAL ||
          overlap.first == ReferenceLineInfo::STOP_SIGN ||
          overlap.first == ReferenceLineInfo::YIELD_SIGN) &&
         traffic_sign_overlap == nullptr) {
       traffic_sign_overlap = const_cast<hdmap::PathOverlap*>(&overlap.second);
       break;
-    } else if (overlap.first == ReferenceLineInfo::PNC_JUNCTION &&
+    } // 如果遇到PNC路口（规划与控制交叉口），且pnc_junction_overlap未被赋值，则将其设为当前重叠区域。
+    else if (overlap.first == ReferenceLineInfo::PNC_JUNCTION &&
                pnc_junction_overlap == nullptr) {
       pnc_junction_overlap = const_cast<hdmap::PathOverlap*>(&overlap.second);
     }
   }
 
+
+  // 若差值大于等于预设阈值kJunctionDelta，比较两者的起始位置，保留更靠前的那个，将另一个置为nullptr。
   if (traffic_sign_overlap && pnc_junction_overlap) {
     static constexpr double kJunctionDelta = 10.0;
     double s_diff = std::fabs(traffic_sign_overlap->start_s -
@@ -100,15 +114,20 @@ bool BareIntersectionUnprotectedScenario::IsTransferable(
     }
   }
 
+  // 没有路口，也没有标志
   if (traffic_sign_overlap || !pnc_junction_overlap) {
     return false;
   }
 
+  // 若车辆在交叉路口有通行权，则函数提前返回 false，表示不需要进一步处理让行逻辑。
   if (reference_line_info.GetIntersectionRightofWayStatus(
           *pnc_junction_overlap)) {
     return false;
   }
 
+
+  // 这段代码用于判断车辆是否处于“裸露路口”（bare junction）场景。
+  // 若距离在合理范围内（大于0且小于配置阈值），则返回 true，表示进入裸露路口场景。
   const double adc_front_edge_s = reference_line_info.AdcSlBoundary().end_s();
   const double adc_distance_to_pnc_junction =
       pnc_junction_overlap->start_s - adc_front_edge_s;
@@ -126,12 +145,17 @@ bool BareIntersectionUnprotectedScenario::IsTransferable(
   return bare_junction_scenario;
 }
 
+// 判断车辆是否进入无保护裸露交叉路口场景，并更新规划上下文信息。
+
 bool BareIntersectionUnprotectedScenario::Enter(Frame* frame) {
   // set to first_encountered pnc_junction
+  // 获取当前参考线上的首个相遇重叠区域 first_encountered_overlaps。
   const auto& first_encountered_overlaps =
       frame->reference_line_info().front().FirstEncounteredOverlaps();
   for (const auto& overlap : first_encountered_overlaps) {
+    // 遍历这些重叠区域，查找类型为 PNC_JUNCTION 的对象
     if (overlap.first == ReferenceLineInfo::PNC_JUNCTION) {
+      // 找到！记录该路口的 ID 和起始位置（start_s），并更新到上下文 context_
       context_.current_pnc_junction_overlap_id = overlap.second.object_id;
       ADEBUG << "Update PlanningContext with first_encountered pnc_junction["
              << overlap.second.object_id << "] start_s["

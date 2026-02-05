@@ -32,6 +32,7 @@ StageResult BareIntersectionUnprotectedStageIntersectionCruise::Process(
   ADEBUG << "stage: IntersectionCruise";
   CHECK_NOTNULL(frame);
 
+  // 调用 ExecuteTaskOnReferenceLine 函数，传入规划初始点和帧数据，返回执行结果 result
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "StopSignUnprotectedStageIntersectionCruise plan error";
@@ -45,6 +46,7 @@ StageResult BareIntersectionUnprotectedStageIntersectionCruise::Process(
 }
 
 hdmap::PathOverlap*
+// 从规划上下文 context 中提取当前 PNC 路口的重叠 ID
 BareIntersectionUnprotectedStageIntersectionCruise::GetTrafficSignOverlap(
     const ReferenceLineInfo& reference_line_info,
     const PlanningContext* context) const {

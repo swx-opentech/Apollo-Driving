@@ -42,6 +42,7 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
   scenario_config_.CopyFrom(
       GetContextAs<BareIntersectionUnprotectedContext>()->scenario_config);
 
+  // 调用 ExecuteTaskOnReferenceLine 函数，传入规划初始点和帧数据，返回执行结果 result。
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "BareIntersectionUnprotectedStageApproach planning error";
@@ -52,6 +53,8 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
   const std::string pnc_junction_overlap_id =
       GetContextAs<BareIntersectionUnprotectedContext>()
           ->current_pnc_junction_overlap_id;
+  
+  // 若该ID为空，则调用FinishScenario()结束当前场景。
   if (pnc_junction_overlap_id.empty()) {
     return FinishScenario();
   }
@@ -64,6 +67,9 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
     return FinishScenario();
   }
 
+
+  // !!!!!! 判断自动驾驶车辆是否已通过PNC交叉路口的停止线：!!!!!!!
+  // !!!!!! 判断自动驾驶车辆是否已通过PNC交叉路口的停止线：!!!!!!!
   static constexpr double kPassStopLineBuffer = 0.3;  // unit: m
   const double adc_front_edge_s = reference_line_info.AdcSlBoundary().end_s();
   const double distance_adc_to_pnc_junction =
@@ -72,31 +78,39 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
          << "] start_s[" << current_pnc_junction->start_s
          << "] distance_adc_to_pnc_junction[" << distance_adc_to_pnc_junction
          << "]";
+  
+  // 超过停止线
   if (distance_adc_to_pnc_junction < -kPassStopLineBuffer) {
     // passed stop line
     return FinishStage(frame);
   }
 
   // set cruise_speed to slow down
+  // 限制巡航速度：通过 LimitCruiseSpeed 将巡航速度设置为较慢的速度，以确保安全接近路口
   frame->mutable_reference_line_info()->front().LimitCruiseSpeed(
       scenario_config_.approach_cruise_speed());
 
   // set right_of_way_status
+  // 设置路权状态：调用 SetJunctionRightOfWay 设置当前路口的路权状态，参数表明车辆在指定位置（start_s）不具有优先通行权
   reference_line_info.SetJunctionRightOfWay(current_pnc_junction->start_s,
                                             false);
-
+  
+  // 执行路径规划任务：调用 ExecuteTaskOnReferenceLine 执行参考线上的规划任务
   result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "BareIntersectionUnprotectedStageApproach planning error";
   }
 
   std::vector<std::string> wait_for_obstacle_ids;
+  // 检查障碍物：调用 CheckClear 函数判断路径是否畅通，并获取需等待的障碍物ID列表
   bool clear = CheckClear(reference_line_info, &wait_for_obstacle_ids);
 
-  if (scenario_config_.enable_explicit_stop()) {
+  if (scenario_config_.enable_explicit_stop()) { // 启用了显式停车（enable_explicit_stop）
     bool stop = false;
     static constexpr double kCheckClearDistance = 5.0;  // meter
     static constexpr double kStartWatchDistance = 2.0;  // meter
+    
+    // 距离在 [kStartWatchDistance, kCheckClearDistance] 范围内且路径不畅通时触发停车
     if (distance_adc_to_pnc_junction <= kCheckClearDistance &&
         distance_adc_to_pnc_junction >= kStartWatchDistance && !clear) {
       stop = true;
@@ -104,6 +118,7 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
       // creeping area
       counter_ = clear ? counter_ + 1 : 0;
 
+      // 若路径畅通则递增计数器，否则重置；计数器达到阈值后允许通行，否则继续停车。
       if (counter_ >= 5) {
         counter_ = 0;  // reset
       } else {
@@ -111,6 +126,7 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
       }
     }
 
+    // 停车决策
     if (stop) {
       // build stop decision
       ADEBUG << "BuildStopDecision: bare pnc_junction["
@@ -118,6 +134,8 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
              << current_pnc_junction->start_s << "]";
       const std::string virtual_obstacle_id =
           "PNC_JUNCTION_" + current_pnc_junction->object_id;
+
+      // 调用停车决策函数：使用 planning::util::BuildStopDecision 构建停车决策
       planning::util::BuildStopDecision(
           virtual_obstacle_id, current_pnc_junction->start_s,
           scenario_config_.stop_distance(),
@@ -127,6 +145,7 @@ StageResult BareIntersectionUnprotectedStageApproach::Process(
     }
   }
 
+  // 将当前阶段的状态设置为“运行中”（RUNNING），并返回该操作的结果。
   return result.SetStageStatus(StageStatusType::RUNNING);
 }
 
@@ -172,6 +191,9 @@ bool BareIntersectionUnprotectedStageApproach::CheckClear(
   return all_far_away;
 }
 
+// 完成当前阶段并准备进入下一阶段
+// 设置下一阶段为 "BARE_INTERSECTION_UNPROTECTED_INTERSECTION_CRUISE"
+// 重置参考线的巡航速度为默认值 FLAGS_default_cruise_speed
 StageResult BareIntersectionUnprotectedStageApproach::FinishStage(
     Frame* frame) {
   next_stage_ = "BARE_INTERSECTION_UNPROTECTED_INTERSECTION_CRUISE";
