@@ -38,12 +38,15 @@ StageResult EmergencyPullOverStageSlowDown::Process(
   ADEBUG << "stage: SlowDown";
   CHECK_NOTNULL(frame);
 
+  // 获取紧急停车场景的上下文对象
   auto scenario_context = GetContextAs<EmergencyPullOverContext>();
   scenario_config_.CopyFrom(scenario_context->scenario_config);
 
   // set cruise_speed to slow down
+  // 获取车辆当前线速度作为ADC速度
   const double adc_speed = injector_->vehicle_state()->linear_velocity();
   double target_slow_down_speed = scenario_context->target_slow_down_speed;
+  // 检查场景上下文中的目标减速速度是否有效
   if (target_slow_down_speed <= 0) {
     target_slow_down_speed = scenario_context->target_slow_down_speed =
         std::max(
@@ -51,15 +54,20 @@ StageResult EmergencyPullOverStageSlowDown::Process(
             adc_speed - scenario_config_.max_stop_deceleration() *
                             scenario_config_.slow_down_deceleration_time());
   }
+  
+  // 获取当前帧的第一个参考线信息，并设置巡航速度限制为目标减速值
   auto& reference_line_info = frame->mutable_reference_line_info()->front();
   reference_line_info.LimitCruiseSpeed(target_slow_down_speed);
 
+  // 在参考线上执行规划任务
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "EmergencyPullOverStageSlowDown planning error";
   }
 
   // check slow enough
+  // 检查车辆是否已减速到目标速度。比较当前ADC测速与目标减速速度的差值是否小于等于容差范围。
+  // 如果满足条件则完成阶段任务，否则继续运行并返回运行状态。
   static constexpr double kSpeedTolarence = 1.0;
   if (adc_speed - target_slow_down_speed <= kSpeedTolarence) {
     return FinishStage();
