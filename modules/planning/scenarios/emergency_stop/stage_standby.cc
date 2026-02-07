@@ -33,6 +33,8 @@ namespace planning {
 
 using apollo::common::TrajectoryPoint;
 
+
+// 获取场景上下文
 StageResult EmergencyStopStageStandby::Process(
     const TrajectoryPoint& planning_init_point, Frame* frame) {
   ADEBUG << "stage: Standby";
@@ -42,25 +44,31 @@ StageResult EmergencyStopStageStandby::Process(
       GetContextAs<EmergencyStopContext>()->scenario_config);
 
   // add a stop fence
+  // 获取车辆参考线信息
   const auto& reference_line_info = frame->reference_line_info().front();
   const auto& reference_line = reference_line_info.reference_line();
   const double adc_front_edge_s = reference_line_info.AdcSlBoundary().end_s();
   const double stop_distance = scenario_config_.stop_distance();
 
-  bool stop_fence_exist = false;
+  bool stop_fence_exist = false; // 初始化，表示默认没有停止线。
   double stop_line_s;
+  // 获取规划状态中的紧急停车信息
   const auto& emergency_stop_status =
       injector_->planning_context()->planning_status().emergency_stop();
+
+  // 如果紧急停车状态包含停止线点，则将其从世界坐标系转换为参考线的 SL 坐标系
   if (emergency_stop_status.has_stop_fence_point()) {
     common::SLPoint stop_fence_sl;
     reference_line.XYToSL(emergency_stop_status.stop_fence_point(),
                           &stop_fence_sl);
+    // 若转换后的停止线位置大于自车前缘位置，则标记存在停止线，并记录其 s 值
     if (stop_fence_sl.s() > adc_front_edge_s) {
       stop_fence_exist = true;
       stop_line_s = stop_fence_sl.s();
     }
   }
 
+  // 设置紧急停车的停止线位置
   if (!stop_fence_exist) {
     static constexpr double kBuffer = 2.0;
     stop_line_s = adc_front_edge_s + stop_distance + kBuffer;
@@ -74,6 +82,7 @@ StageResult EmergencyStopStageStandby::Process(
     emergency_stop_fence_point->set_y(stop_fence_point.y());
   }
 
+  // 构建一个紧急停车决策
   const std::string virtual_obstacle_id = "EMERGENCY_STOP";
   const std::vector<std::string> wait_for_obstacle_ids;
   planning::util::BuildStopDecision(
@@ -84,6 +93,7 @@ StageResult EmergencyStopStageStandby::Process(
   ADEBUG << "Build a stop fence for emergency_stop: id[" << virtual_obstacle_id
          << "] s[" << stop_line_s << "]";
 
+  // 执行规划任务并根据结果决定是否记录错误信息
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "EmergencyStopStageStandby planning error";
