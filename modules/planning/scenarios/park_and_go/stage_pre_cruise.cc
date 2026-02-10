@@ -38,24 +38,29 @@ StageResult ParkAndGoStagePreCruise::Process(
   const ScenarioParkAndGoConfig& scenario_config =
       GetContextAs<ParkAndGoContext>()->scenario_config;
 
-  frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true);
-  StageResult result = ExecuteTaskOnOpenSpace(frame);
+  frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true); // 设置开放空间轨迹标志位为 true
+  StageResult result = ExecuteTaskOnOpenSpace(frame); // 执行开放空间任务
   if (result.HasError()) {
     AERROR << "ParkAndGoStagePreCruise planning error";
     return result.SetStageStatus(StageStatusType::ERROR);
   }
   // const bool ready_to_cruise =
   //     CheckADCReadyToCruise(frame, scenario_config_);
-  auto vehicle_status = injector_->vehicle_state();
+  
+  // 判断车辆是否满足进入巡航状态的条件
+  auto vehicle_status = injector_->vehicle_state(); // 获取当前车辆状态 vehicle_status
   AINFO << "Current steering percentage: "
         << vehicle_status->steering_percentage();;
 
+  // 方向盘转角百分比小于配置的最大值 调用 CheckADCReadyToCruise 函数确认车辆已准备好巡航
   if ((std::fabs(vehicle_status->steering_percentage()) <
        scenario_config.max_steering_percentage_when_cruise()) &&
       CheckADCReadyToCruise(injector_->vehicle_state(), frame,
                             scenario_config)) {
+    // 调用 FinishStage() 结束当前阶段
     return FinishStage();
   }
+  // 返回运行中状态
   return result.SetStageStatus(StageStatusType::RUNNING);
 }
 

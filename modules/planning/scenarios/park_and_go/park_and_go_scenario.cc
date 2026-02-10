@@ -30,6 +30,7 @@ namespace planning {
 using apollo::hdmap::HDMapUtil;
 
 bool ParkAndGoScenario::Init(std::shared_ptr<DependencyInjector> injector, const std::string& name) {
+    // 确保场景正确初始化并加载相关配置
     if (init_) {
         return true;
     }
@@ -71,13 +72,14 @@ bool ParkAndGoScenario::IsTransferable(const Scenario* const other_scenario, con
     const double current_y = vehicle_state.y();
 
     //wlh
+    // 获取目标位置的坐标 dest_x 和 dest_y。计算当前位置 (current_x, current_y) 与目标位置之间的横向距离 dx 和纵向距离 dy。
     const auto& dest_pose = routing_end->pose();
     double dest_x = dest_pose.x();
     double dest_y = dest_pose.y();
 
     double dx = dest_x - current_x;
     double dy = dest_y - current_y;
-    double distance = std::sqrt(dx * dx + dy * dy);
+    double distance = std::sqrt(dx * dx + dy * dy); // 使用勾股定理计算两点间的直线距离 distance
     
 
     // 施工绕行场景判断
@@ -124,7 +126,7 @@ bool ParkAndGoScenario::IsTransferable(const Scenario* const other_scenario, con
         // 排序x坐标
         std::sort(obstacle_x_coords.begin(), obstacle_x_coords.end());
 
-        // 检查是否有足够障碍物
+        // 检查是否有足够障碍物 确保至少有4个障碍物
         if (obstacle_x_coords.size() >= 4) {
             // 获取x坐标第四大的障碍物
             const double fourth_largest_x = obstacle_x_coords[obstacle_x_coords.size() - 4];

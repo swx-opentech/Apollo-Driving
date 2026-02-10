@@ -41,7 +41,7 @@ StageResult ParkAndGoStageAdjust::Process(const TrajectoryPoint& planning_init_p
     static int shigong_num = 0;
     static double primary_pos_x = 0.0;
     static double primary_pos_y = 0.0;
-    static bool initial_position_set = false;
+    static bool initial_position_set = false; // 标记初始位置是否已设置
 
     // 获取车辆状态
     const auto vehicle_state_provider = injector_->vehicle_state();
@@ -63,9 +63,10 @@ StageResult ParkAndGoStageAdjust::Process(const TrajectoryPoint& planning_init_p
         return StageResult(StageStatusType::ERROR);
     }
 
-    const auto& reference_line_info = frame->reference_line_info().front();
-    const auto& path_decision = reference_line_info.path_decision();
-    const int obstacle_count = path_decision.obstacles().Items().size();
+    const auto& reference_line_info = frame->reference_line_info().front(); // 获取参考线信息
+    const auto& path_decision = reference_line_info.path_decision(); // 获取路径决策
+    const int obstacle_count = path_decision.obstacles().Items().size(); // 计路径决策中障碍物的数量
+    
     if (!shigong_judged && obstacle_count > 30) {
         shigong_judged = true;
         shigong_num = 11;
@@ -90,13 +91,14 @@ StageResult ParkAndGoStageAdjust::Process(const TrajectoryPoint& planning_init_p
             constexpr double kEpsilon = 1e-5;  // 浮点数比较容差
 
             // 查找对应这个x坐标的障碍物
-            for (const auto* obstacle : path_decision.obstacles().Items()) {
+            for (const auto* obstacle : path_decision.obstacles().Items()) { // 遍历路径决策中的障碍物列表
                 if (!obstacle)
                     continue;
 
-                const auto& perception = obstacle->Perception();
-                if (std::abs(perception.position().x() - fourth_largest_x) < kEpsilon) {
+                const auto& perception = obstacle->Perception(); // 获取感知信息
+                if (std::abs(perception.position().x() - fourth_largest_x) < kEpsilon) { // 判断其感知位置的x坐标是否接近第四大x值
                     // 判断y坐标是否小于车辆初始y坐标
+                    // 若满足条件，根据障碍物y坐标与车辆初始y坐标（primary_pos_y）的关系，以及x坐标与车辆初始x坐标（primary_pos_x）的距离，设置施工编号（shigong_num）为1、2、3或4。
                     if (perception.position().y() < primary_pos_y) {
                         shigong_num = (std::abs(perception.position().x() - primary_pos_x) < 100) ? 4 : 3;
                     } else {
@@ -121,16 +123,19 @@ StageResult ParkAndGoStageAdjust::Process(const TrajectoryPoint& planning_init_p
     }
 
     // 原有逻辑保持不变
-    frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true);
-    StageResult result = ExecuteTaskOnOpenSpace(frame);
+    frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true); // 设置frame对象的开放空间轨迹标志
+    StageResult result = ExecuteTaskOnOpenSpace(frame); // 执行开放空间任务
     if (result.HasError()) {
         AERROR << "ParkAndGoStageAdjust planning error";
         return result.SetStageStatus(StageStatusType::ERROR);
     }
 
+    // 已准备好进入巡航状态
     const bool is_ready_to_cruise = CheckADCReadyToCruise(
             injector_->vehicle_state(), frame, GetContextAs<ParkAndGoContext>()->scenario_config);
 
+
+    // 判断当前轨迹是否已结束
     bool is_end_of_trajectory = false;
     const auto& history_frame = injector_->frame_history()->Latest();
     if (history_frame) {
@@ -147,12 +152,15 @@ StageResult ParkAndGoStageAdjust::Process(const TrajectoryPoint& planning_init_p
 }
 
 StageResult ParkAndGoStageAdjust::FinishStage() {
+    // 完成停车起步场景中的调整阶段（ParkAndGoStageAdjust），并决定下一阶段
     const auto vehicle_status = injector_->vehicle_state();
     ADEBUG << vehicle_status->steering_percentage();
     if (std::fabs(vehicle_status->steering_percentage())
         < GetContextAs<ParkAndGoContext>()->scenario_config.max_steering_percentage_when_cruise()) {
+        // 若转向角小于配置的最大巡航转向角，则直接进入巡航阶段
         next_stage_ = "PARK_AND_GO_CRUISE";
     } else {
+        // 重置初始位置后进入巡航阶段
         ResetInitPostion();
         next_stage_ = "PARK_AND_GO_CRUISE";
     }
