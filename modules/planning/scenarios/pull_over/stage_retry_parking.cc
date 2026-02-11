@@ -42,14 +42,15 @@ StageResult PullOverStageRetryParking::Process(
 
   // Open space planning doesn't use planning_init_point from upstream because
   // of different stitching strategy
-  frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true);
-  StageResult result = ExecuteTaskOnOpenSpace(frame);
+  frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true); // 设置当前轨迹为开放空间轨迹
+  StageResult result = ExecuteTaskOnOpenSpace(frame); // 调用ExecuteTaskOnOpenSpace函数执行开放空间规划任务
   if (result.HasError()) {
     AERROR << "PullOverStageRetryParking planning error";
     return result.SetStageStatus(StageStatusType::ERROR);
   }
 
   // set debug info in planning_data
+  // 将泊车状态信息从规划上下文中复制到调试数据结构
   const auto& pull_over_status =
       injector_->planning_context()->planning_status().pull_over();
   auto* pull_over_debug = frame->mutable_open_space_info()
@@ -64,8 +65,9 @@ StageResult PullOverStageRetryParking::Process(
   pull_over_debug->set_width_right(pull_over_status.width_right());
   frame->mutable_open_space_info()->sync_debug_instance();
 
+  // 调用 CheckADCPullOverOpenSpace() 函数检查是否满足自动驾驶车辆靠边停车的条件
   if (CheckADCPullOverOpenSpace()) {
-    return FinishStage();
+    return FinishStage(); // 满足则调用 FinishStage() 函数结束当前阶段。
   }
 
   return result.SetStageStatus(StageStatusType::RUNNING);
@@ -76,8 +78,11 @@ StageResult PullOverStageRetryParking::FinishStage() {
 }
 
 bool PullOverStageRetryParking::CheckADCPullOverOpenSpace() {
+  // 检查自动驾驶车辆是否成功到达指定的靠边停车目标位置
   const auto& pull_over_status =
       injector_->planning_context()->planning_status().pull_over();
+  
+  // 验证pull_over_status中是否包含完整的目标位置和朝向信息
   if (!pull_over_status.has_position() ||
       !pull_over_status.position().has_x() ||
       !pull_over_status.position().has_y() || !pull_over_status.has_theta()) {

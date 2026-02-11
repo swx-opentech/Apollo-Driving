@@ -42,11 +42,12 @@ StageResult PullOverStageRetryApproachParking::Process(
   CHECK_NOTNULL(frame);
   CHECK_NOTNULL(context_);
 
-  StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
+  StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame); // 执行参考线上的任务
   if (result.HasError()) {
     AERROR << "PullOverStageRetryApproachParking planning error";
   }
 
+  // 调用 CheckADCStop(*frame) 函数检查当前帧是否满足 ADC 停止条件
   if (CheckADCStop(*frame)) {
     return FinishStage();
   }
@@ -55,27 +56,32 @@ StageResult PullOverStageRetryApproachParking::Process(
 }
 
 bool PullOverStageRetryApproachParking::CheckADCStop(const Frame& frame) {
+  // 获取车辆状态和参考线路信息
   const auto& reference_line_info = frame.reference_line_info().front();
   const double adc_speed = injector_->vehicle_state()->linear_velocity();
   const double max_adc_stop_speed = common::VehicleConfigHelper::Instance()
                                         ->GetConfig()
                                         .vehicle_param()
                                         .max_abs_speed_when_stopped();
+
+  // 当前车速(adc_speed)大于最大停车速度阈值(max_adc_stop_speed)未停止
   if (adc_speed > max_adc_stop_speed) {
     ADEBUG << "ADC not stopped: speed[" << adc_speed << "]";
     return false;
   }
 
   // check stop close enough to stop line of the stop_sign
-  const double adc_front_edge_s = reference_line_info.AdcSlBoundary().end_s();
+  const double adc_front_edge_s = reference_line_info.AdcSlBoundary().end_s(); // 获取ADC（自动驾驶车辆）前缘位置 和停车线起始位置
   const double stop_fence_start_s =
       frame.open_space_info().open_space_pre_stop_fence_s();
   const double distance_stop_line_to_adc_front_edge =
       stop_fence_start_s - adc_front_edge_s;
 
+  // 判断车辆是否在有效的停车位置
   if (distance_stop_line_to_adc_front_edge >
       GetContextAs<PullOverContext>()
           ->scenario_config.max_valid_stop_distance()) {
+    // 若该距离超过配置的最大有效停车距离，则认为不是有效停车点
     ADEBUG << "not a valid stop. too far from stop line.";
     return false;
   }
