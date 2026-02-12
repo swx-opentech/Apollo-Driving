@@ -32,15 +32,18 @@ StageResult StopSignUnprotectedStageIntersectionCruise::Process(
   ADEBUG << "stage: IntersectionCruise";
   CHECK_NOTNULL(frame);
 
-  StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
+  StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame); // 执行参考线任务
   if (result.HasError()) {
     AERROR << "StopSignUnprotectedStageIntersectionCruise plan error";
   }
 
+  // 调用 CheckDone 函数判断阶段是否完成，参数包括帧数据、规划上下文和一个布尔值
   bool stage_done = CheckDone(*frame, injector_->planning_context(), false);
   if (stage_done) {
+    // 如果阶段已完成（stage_done 为真），调用 FinishStage() 结束当前阶段
     return FinishStage();
   }
+  // 若未完成，则通过 result.SetStageStatus() 将阶段状态设为运行中（RUNNING）并返回
   return result.SetStageStatus(StageStatusType::RUNNING);
 }
 
