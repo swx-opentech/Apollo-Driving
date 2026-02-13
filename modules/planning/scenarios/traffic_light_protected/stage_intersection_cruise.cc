@@ -26,15 +26,18 @@ namespace apollo {
 namespace planning {
 
 StageResult TrafficLightProtectedStageIntersectionCruise::Process(
+  // 输出调试信息并确保frame指针非空
     const common::TrajectoryPoint& planning_init_point, Frame* frame) {
   ADEBUG << "stage: IntersectionCruise";
   CHECK_NOTNULL(frame);
 
+  // 调用ExecuteTaskOnReferenceLine在参考线上执行规划任务
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "TrafficLightProtectedStageIntersectionCruise plan error";
   }
 
+  // 检查某个阶段是否完成
   bool stage_done = CheckDone(*frame, injector_->planning_context(), true);
 
   if (stage_done) {
