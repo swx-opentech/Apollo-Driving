@@ -32,12 +32,14 @@ StageResult TrafficLightUnprotectedLeftTurnStageIntersectionCruise::Process(
   ADEBUG << "stage: IntersectionCruise";
   CHECK_NOTNULL(frame);
 
+  // 调用 ExecuteTaskOnReferenceLine 执行规划任务，若出错则记录错误日志
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "TrafficLightUnprotectedLeftTurnStageIntersectionCruise "
            << "plan error";
   }
 
+  // 调用 CheckDone 函数，传入帧数据、规划上下文和布尔值 true，判断当前阶段是否已完成，结果存储在 stage_done 中
   bool stage_done = CheckDone(*frame, injector_->planning_context(), true);
   if (stage_done) {
     return FinishStage();
