@@ -27,19 +27,24 @@ namespace planning {
 
 StageResult TrafficLightUnprotectedRightTurnStageIntersectionCruise::Process(
     const common::TrajectoryPoint& planning_init_point, Frame* frame) {
+  // 输出调试信息并确保frame指针非空
   ADEBUG << "stage: IntersectionCruise";
   CHECK_NOTNULL(frame);
 
+  // 调用ExecuteTaskOnReferenceLine在参考线上执行规划任务
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "TrafficLightUnprotectedRightTurnStageIntersectionCruise "
            << "plan error";
   }
 
+  // 通过CheckDone判断当前阶段是否已完成
   bool stage_done = CheckDone(*frame, injector_->planning_context(), false);
   if (stage_done) {
+    // 若阶段完成，调用FinishStage()结束该阶段
     return FinishStage();
   }
+  // 否则返回运行状态（RUNNING）
   return result.SetStageStatus(StageStatusType::RUNNING);
 }
 

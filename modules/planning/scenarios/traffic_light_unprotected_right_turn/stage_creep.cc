@@ -69,29 +69,36 @@ StageResult TrafficLightUnprotectedRightTurnStageCreep::Process(
   }
 
   // Run creep decider.
+  // 遍历所有可行驶的参考线信息，并对每条参考线执行蠕行决策处理
   for (auto& reference_line_info : *frame->mutable_reference_line_info()) {
     if (!reference_line_info.IsDrivable()) {
+      // 若某条参考线不可行驶（IsDrivable() 返回 false），则记录错误并跳出循环
       AERROR << "The generated path is not drivable";
       break;
     }
 
+    // 对可行驶的参考线调用 ProcessCreep 函数进行蠕行决策处理
     const auto ret = ProcessCreep(frame, &reference_line_info);
     if (!ret.ok()) {
+      // 若处理失败（ret.ok() 为 false），则记录错误信息并跳出循环
       AERROR << "Failed to run CreepDecider ], Error message: "
              << ret.error_message();
       break;
     }
   }
 
+  // 执行参考线上的规划任务
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "TrafficLightUnprotectedRightTurnStageCreep planning error";
   }
 
+  // 检查当前交通灯重叠ID是否为空
   if (context->current_traffic_light_overlap_ids.empty()) {
     return FinishScenario();
   }
 
+  // 检查当前交通信号灯是否在参考路径上存在重叠区域，如果未找到重叠区域，则调用 FinishScenario() 结束当前场景
   const auto& reference_line_info = frame->reference_line_info().front();
   const std::string traffic_light_overlap_id =
       context->current_traffic_light_overlap_ids[0];
@@ -108,23 +115,27 @@ StageResult TrafficLightUnprotectedRightTurnStageCreep::Process(
 
   // creep
   // note: don't check traffic light color while creeping on right turn
+  // 通过当前时间和蠕行开始时间差值获取已等待时间
   const double wait_time = Clock::NowInSeconds() - context->creep_start_time;
   const double timeout_sec = scenario_config.creep_timeout_sec();
 
   double creep_stop_s = GetCreepFinishS(current_traffic_light_overlap->end_s,
                                         *frame, reference_line_info);
+  // 计算蠕行停止位置与自车当前位置的距离
   const double distance =
       creep_stop_s - reference_line_info.AdcSlBoundary().end_s();
   if (distance <= 0.0) {
+    // 生成固定距离的蠕行速度曲线
     auto& rfl_info = frame->mutable_reference_line_info()->front();
     *(rfl_info.mutable_speed_data()) =
         SpeedProfileGenerator::GenerateFixedDistanceCreepProfile(0.0, 0);
   }
 
+  // 调用CheckCreepDone判断是否满足结束条件（如超时或到达目标）
   if (CheckCreepDone(*frame, reference_line_info,
                      current_traffic_light_overlap->end_s, wait_time,
                      timeout_sec)) {
-    return FinishStage();
+    return FinishStage(); // 满足则调用FinishStage()结束阶段
   }
 
   return result.SetStageStatus(StageStatusType::RUNNING);
