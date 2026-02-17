@@ -27,8 +27,8 @@ StageResult StageParking::Process(const common::TrajectoryPoint& planning_init_p
     // Open space planning doesn't use planning_init_point from upstream because
     // of different stitching strategy
     auto scenario_context = GetContextAs<ValetParkingContext>();
-    frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true);
-    *(frame->mutable_open_space_info()->mutable_target_parking_spot_id()) = scenario_context->target_parking_spot_id;
+    frame->mutable_open_space_info()->set_is_on_open_space_trajectory(true); // 将帧（frame）标记为处于开放空间轨迹状态
+    *(frame->mutable_open_space_info()->mutable_target_parking_spot_id()) = scenario_context->target_parking_spot_id; // 从场景上下文获取目标停车位ID并写入帧信息
     StageResult result = ExecuteTaskOnOpenSpace(frame);
     if (result.HasError()) {
         AERROR << "StageParking planning error";

@@ -43,40 +43,47 @@ StageResult StageApproachingParkingSpot::Process(
   StageResult result;
   auto scenario_context = GetContextAs<ValetParkingContext>();
 
+  // 目标停车点 ID 是否为空
   if (scenario_context->target_parking_spot_id.empty()) {
     return result.SetStageStatus(StageStatusType::ERROR);
   }
 
   *(frame->mutable_open_space_info()->mutable_target_parking_spot_id()) =
-      scenario_context->target_parking_spot_id;
+      scenario_context->target_parking_spot_id; // 目标停车点 ID
   frame->mutable_open_space_info()->set_pre_stop_rightaway_flag(
-      scenario_context->pre_stop_rightaway_flag);
+      scenario_context->pre_stop_rightaway_flag); // 设置预停标志位
   *(frame->mutable_open_space_info()->mutable_pre_stop_rightaway_point()) =
-      scenario_context->pre_stop_rightaway_point;
+      scenario_context->pre_stop_rightaway_point; // 设置预停位置点
   auto* reference_lines = frame->mutable_reference_line_info();
+
+  // 遍历参考线集合，对每条参考线上的路径决策进行处理
   for (auto& reference_line : *reference_lines) {
     auto* path_decision = reference_line.path_decision();
     if (nullptr == path_decision) {
+      // 若路径决策为空则跳过
       continue;
     }
     auto* dest_obstacle = path_decision->Find(FLAGS_destination_obstacle_id);
     if (nullptr == dest_obstacle) {
+      // 若未找到目标障碍物则跳过
       continue;
     }
     ObjectDecisionType decision;
     decision.mutable_ignore();
     dest_obstacle->EraseDecision();
     dest_obstacle->AddLongitudinalDecision("ignore-dest-in-valet-parking",
-                                           decision);
+                                           decision); // 创建一个"忽略"决策并应用到目标障碍物上
   }
-  result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
+  result = ExecuteTaskOnReferenceLine(planning_init_point, frame); // 基于参考线执行规划任务
 
+  // 处理自动驾驶场景中的停车逻辑
   scenario_context->pre_stop_rightaway_flag =
-      frame->open_space_info().pre_stop_rightaway_flag();
+      frame->open_space_info().pre_stop_rightaway_flag(); // 预停标志
   scenario_context->pre_stop_rightaway_point =
-      frame->open_space_info().pre_stop_rightaway_point();
+      frame->open_space_info().pre_stop_rightaway_point(); // 预停点
 
   if (CheckADCStop(*frame)) {
+    // 调用CheckADCStop函数判断车辆是否已停止，若满足条件则进入下一阶段（VALET_PARKING_PARKING）并返回完成状态
     next_stage_ = "VALET_PARKING_PARKING";
     return StageResult(StageStatusType::FINISHED);
   }
@@ -85,10 +92,12 @@ StageResult StageApproachingParkingSpot::Process(
     return result.SetStageStatus(StageStatusType::ERROR);
   }
 
+  // 若无异常且未满足停止条件，则返回运行中状态
   return result.SetStageStatus(StageStatusType::RUNNING);
 }
 
 bool StageApproachingParkingSpot::CheckADCStop(const Frame& frame) {
+  // 检查自动驾驶车辆（ADC）是否在停车点附近正确停止
   const auto& reference_line_info = frame.reference_line_info().front();
   const double adc_speed = injector_->vehicle_state()->linear_velocity();
   const double max_adc_stop_speed = common::VehicleConfigHelper::Instance()
@@ -96,6 +105,7 @@ bool StageApproachingParkingSpot::CheckADCStop(const Frame& frame) {
                                         .vehicle_param()
                                         .max_abs_speed_when_stopped();
   if (adc_speed > max_adc_stop_speed) {
+    // 判断车辆当前速度是否低于最大允许停止速度，若超过则返回false
     ADEBUG << "ADC not stopped: speed[" << adc_speed << "]";
     return false;
   }
@@ -109,6 +119,7 @@ bool StageApproachingParkingSpot::CheckADCStop(const Frame& frame) {
 
   if (distance_stop_line_to_adc_front_edge >
       scenario_config_.max_valid_stop_distance()) {
+    // 计算车辆前缘与停车线的距离，若距离过大（超过配置的最大有效停车距离），则认为未正确停车，返回false
     ADEBUG << "not a valid stop. too far from stop line.";
     return false;
   }
