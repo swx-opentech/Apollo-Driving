@@ -59,17 +59,21 @@ StageResult YieldSignStageCreep::Process(
   auto scenario_context = GetContextAs<YieldSignContext>();
   scenario_config_.CopyFrom(scenario_context->scenario_config);
 
-  if (!pipeline_config_.enabled()) {
+  if (!pipeline_config_.enabled()) { // 管道未启用，直接结束场景
     return FinishStage();
   }
 
   // Run creep decider.
+  // 遍历所有可行驶的参考线信息，并对每条参考线执行蠕行决策处理。
   for (auto& reference_line_info : *frame->mutable_reference_line_info()) {
+    // 遍历 frame 中的所有参考线信息
     if (!reference_line_info.IsDrivable()) {
+      // 若某条参考线不可行驶，则记录错误并跳出循环
       AERROR << "The generated path is not drivable";
       break;
     }
 
+    // 对可行驶的参考线调用 ProcessCreep 函数进行蠕行决策处理，若处理失败则记录错误并跳出循环
     const auto ret = ProcessCreep(frame, &reference_line_info);
     if (!ret.ok()) {
       AERROR << "Failed to run CreepDecider ], Error message: "
@@ -78,6 +82,7 @@ StageResult YieldSignStageCreep::Process(
     }
   }
 
+  // 执行参考线上的任务
   StageResult result = ExecuteTaskOnReferenceLine(planning_init_point, frame);
   if (result.HasError()) {
     AERROR << "YieldSignStageCreep planning error";
@@ -87,27 +92,33 @@ StageResult YieldSignStageCreep::Process(
     return FinishScenario();
   }
 
+  // 获取当前参考线上的可识别对象信息
   const auto& reference_line_info = frame->reference_line_info().front();
   const std::string yield_sign_overlap_id =
       scenario_context->current_yield_sign_overlap_ids[0];
 
   // get overlap along reference line
+  // 在参考线上查找指定的让行标志重叠区域
   PathOverlap* current_yield_sign_overlap =
       reference_line_info.GetOverlapOnReferenceLine(
           yield_sign_overlap_id, ReferenceLineInfo::YIELD_SIGN);
   if (!current_yield_sign_overlap) {
+    // 如果未找到该重叠区域，则结束当前场景
     return FinishScenario();
   }
 
   // set right_of_way_status
+  // 通过SetJunctionRightOfWay将让行标志起点标记为无优先通行权
   const double yield_sign_start_s = current_yield_sign_overlap->start_s;
   reference_line_info.SetJunctionRightOfWay(yield_sign_start_s, false);
 
+  // 获取当前时间与开始蠕行时间的差值，并判断是否超时
   const double yield_sign_end_s = current_yield_sign_overlap->end_s;
   const double wait_time =
       Clock::NowInSeconds() - scenario_context->creep_start_time;
   const double timeout_sec = scenario_config_.creep_timeout_sec();
 
+  // 调用GetCreepFinishS计算蠕行结束位置，若车辆已到达或超过该位置，则生成固定距离的蠕行速度曲线
   double creep_stop_s =
       GetCreepFinishS(yield_sign_end_s, *frame, reference_line_info);
   const double distance =
@@ -118,11 +129,14 @@ StageResult YieldSignStageCreep::Process(
         SpeedProfileGenerator::GenerateFixedDistanceCreepProfile(0.0, 0);
   }
 
+  // 调用 CheckCreepDone 检查让行条件是否满足
   if (CheckCreepDone(*frame, reference_line_info, yield_sign_end_s, wait_time,
                      timeout_sec)) {
+    // 若满足，则调用 FinishStage() 结束当前阶段
     return FinishStage();
   }
 
+  // 否则，设置阶段状态为 RUNNING 并返回
   return result.SetStageStatus(StageStatusType::RUNNING);
 }
 
